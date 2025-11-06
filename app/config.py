@@ -1,9 +1,8 @@
-# app/config.py
 import os
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# 👇 Fuerza la carga manual del .env (aunque PyCharm no lo lea automáticamente)
+#Fuerza la carga manual del .env
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 
 class Settings(BaseSettings):

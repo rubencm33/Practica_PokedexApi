@@ -1,4 +1,3 @@
-# app/routers/auth.py
 from fastapi import APIRouter, Depends, Request, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
@@ -10,9 +9,6 @@ from app import auth
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
 
-# -----------------------------
-# Registro de usuarios
-# -----------------------------
 @router.post("/register")
 def register_user(
     request: Request,
@@ -53,10 +49,6 @@ def register_user(
 
     return {"message": "Usuario registrado correctamente", "user_id": new_user.id}
 
-
-# -----------------------------
-# Login (genera token JWT)
-# -----------------------------
 @router.post("/login")
 def login_user(
     request: Request,
@@ -92,10 +84,6 @@ def refresh_token(request: Request, token: str, session: Session = Depends(get_s
     access_token = auth.create_access_token({"sub": user.username, "user_id": user.id})
     return {"access_token": access_token, "token_type": "bearer"}
 
-
-# -----------------------------
-# Endpoint protegido (requiere token)
-# -----------------------------
 @router.get("/me")
 def get_me(current_user: User = Depends(auth.get_current_user)):
     """Devuelve los datos del usuario autenticado"""

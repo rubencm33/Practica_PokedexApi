@@ -1,4 +1,3 @@
-# app/auth.py
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -13,22 +12,12 @@ from app.config import settings
 from app.database import get_session
 from app.models import User
 
-# -----------------------------
-# Configuración de seguridad
-# -----------------------------
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-# -----------------------------
-# Limitadores de peticiones
-# -----------------------------
 REGISTER_LIMIT: Dict[str, list] = {}
 LOGIN_LIMIT: Dict[str, list] = {}
 
-
-# -----------------------------
-# Validaciones
-# -----------------------------
 def verify_email(email: str) -> bool:
     """Valida el formato del email."""
     pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
@@ -45,10 +34,6 @@ def verify_password_strength(password: str) -> bool:
         return False
     return True
 
-
-# -----------------------------
-# Hashing y verificación
-# -----------------------------
 def get_password_hash(password: str) -> str:
     if len(password.encode("utf-8")) > 72:
         password = password[:72]
@@ -59,9 +44,6 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-# -----------------------------
-# Tokens JWT
-# -----------------------------
 def create_access_token(data: dict, expires_delta: timedelta = timedelta(hours=24)):
     """Genera un token JWT con expiración."""
     to_encode = data.copy()
@@ -69,10 +51,6 @@ def create_access_token(data: dict, expires_delta: timedelta = timedelta(hours=2
     to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
-
-# -----------------------------
-# Rate limit simple por IP
-# -----------------------------
 def rate_limited(ip: str, limit_dict: Dict[str, list], limit: int, seconds: int) -> bool:
     """Limita la cantidad de peticiones por IP en un tiempo determinado."""
     now = time.time()
@@ -83,18 +61,11 @@ def rate_limited(ip: str, limit_dict: Dict[str, list], limit: int, seconds: int)
     limit_dict[ip] = timestamps
     return False
 
-
-# -----------------------------
-# Obtener usuario desde la BD
-# -----------------------------
 def get_user_by_username(session: Session, username: str) -> Optional[User]:
     statement = select(User).where(User.username == username)
     return session.exec(statement).first()
 
 
-# -----------------------------
-# Obtener usuario autenticado
-# -----------------------------
 async def get_current_user(
     credentials=Depends(security),
     session: Session = Depends(get_session)

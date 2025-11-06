@@ -1,0 +1,45 @@
+# === Archivos de entorno y configuración ===
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# === Entornos virtuales ===
+.venv/
+env/
+venv/
+ENV/
+
+# === Archivos de base de datos locales ===
+*.db
+*.sqlite3
+
+# === Archivos de logs y cachés ===
+*.log
+*.pot
+*.po
+*.mo
+*.cache
+.cache/
+
+# === IDEs ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Archivos temporales ===
+.DS_Store
+Thumbs.db
+
+# === Compilados ===
+build/
+dist/
+*.egg-info/
+
+# === Test ===
+.coverage
+htmlcov/
+.tox/
+pytest_cache/

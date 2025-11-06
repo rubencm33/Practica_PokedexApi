@@ -1,4 +1,3 @@
-# app/database.py
 from sqlmodel import SQLModel, Session, create_engine
 from app.config import settings
 
@@ -9,7 +8,6 @@ DATABASE_URL = getattr(settings, "DATABASE_URL", "sqlite:///./pokedex.db")
 engine = create_engine(DATABASE_URL, echo=False)
 
 
-# -------------------- Sesión --------------------
 def get_session():
     """
     Dependencia de FastAPI para obtener una sesión de base de datos.
@@ -19,7 +17,6 @@ def get_session():
         yield session
 
 
-# -------------------- Inicialización --------------------
 def init_db():
     """
     Crea todas las tablas en la base de datos (si no existen).
