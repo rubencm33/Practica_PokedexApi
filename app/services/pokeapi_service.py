@@ -94,3 +94,5 @@ class PokeAPIService:
             raise HTTPException(status_code=504, detail="Tiempo de espera agotado")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error inesperado: {e}")
+
+pokeapi_service = PokeAPIService()
