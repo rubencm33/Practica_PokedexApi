@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from app.routers.auth import router as auth_router
 from app.services.pokeapi_service import PokeAPIService
-
+from app.routers import pokemon
+from app.routers import pokedex
 app = FastAPI(title="Pokedex API")
 pokeapi_service = PokeAPIService()
 
@@ -22,6 +23,8 @@ def get_pokemon_species(id_or_name: str):
     return pokeapi_service.get_pokemon_species(identifier=id_or_name)
 
 app.include_router(auth_router)
+app.include_router(pokemon.router)
+app.include_router(pokedex.router)
 
 
 if __name__ == "__main__":
