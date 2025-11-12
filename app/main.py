@@ -3,8 +3,10 @@ from app.routers.auth import router as auth_router
 from app.services.pokeapi_service import PokeAPIService
 from app.routers import pokemon
 from app.routers import pokedex
+from app.routers import teams
 app = FastAPI(title="Pokedex API")
 pokeapi_service = PokeAPIService()
+
 
 @app.get("/pokemon/type/{type_name}")
 def get_pokemon_by_type(type_name: str):
@@ -25,10 +27,10 @@ def get_pokemon_species(id_or_name: str):
 app.include_router(auth_router)
 app.include_router(pokemon.router)
 app.include_router(pokedex.router)
-
+app.include_router(teams.router)
 
 if __name__ == "__main__":
+    import uvicorn
     from app.database import init_db
     init_db()
-    import uvicorn
     uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
