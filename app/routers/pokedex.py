@@ -1,8 +1,10 @@
+from collections import Counter
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
-from typing import Optional, List
+from typing import Optional, List, Counter
 from starlette import status
-from app.database import get_session
+from app.database import get_session, engine
 from app.models import PokedexEntry, PokedexEntryCreate, PokedexEntryUpdate
 from app.dependencies import get_db, get_current_user
 from fastapi.responses import StreamingResponse
@@ -153,5 +155,61 @@ def export_pokedex(
 
     raise HTTPException(status_code=501, detail="Formato PDF no implementado")
 
+@router.get("/stats")
+def get_pokedex_stats(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
 
+    entries = db.exec(
+        select(PokedexEntry).where(PokedexEntry.owner_id == current_user.id)
+    ).all()
 
+    if not entries:
+        return {
+            "total_pokemon": 0,
+            "captured": 0,
+            "favorites": 0,
+            "completion_percentage": 0.0,
+            "most_common_type": None,
+            "capture_streak_days": 0
+        }
+
+    total_pokemon = len(entries)
+    captured_entries = [e for e in entries if e.is_captured]
+    captured = len(captured_entries)
+    favorites = sum(1 for e in entries if e.favorite)
+    completion_percentage = round((captured / total_pokemon) * 100, 1)
+
+    types = []
+    for e in entries:
+        try:
+            pokemon_data = pokeapi_service.get_pokemon(e.pokemon_id)
+            if pokemon_data["types"]:
+                types.append(pokemon_data["types"][0]["type"]["name"])
+        except Exception:
+            continue
+    most_common_type = Counter(types).most_common(1)
+    most_common_type = most_common_type[0][0] if most_common_type else None
+
+    captured_dates = sorted(
+        [e.capture_date.date() for e in captured_entries if e.capture_date]
+    )
+    capture_streak_days = 0
+    if captured_dates:
+        streak = 1
+        for i in range(len(captured_dates) - 1, 0, -1):
+            if (captured_dates[i] - captured_dates[i - 1]).days == 1:
+                streak += 1
+            else:
+                break
+        capture_streak_days = streak
+
+    return {
+        "total_pokemon": total_pokemon,
+        "captured": captured,
+        "favorites": favorites,
+        "completion_percentage": completion_percentage,
+        "most_common_type": most_common_type,
+        "capture_streak_days": capture_streak_days
+    }
