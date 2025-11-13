@@ -4,9 +4,18 @@ from app.services.pokeapi_service import PokeAPIService
 from app.routers import pokemon
 from app.routers import pokedex
 from app.routers import teams
+from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(title="Pokedex API")
 pokeapi_service = PokeAPIService()
 
+app.add_middleware(
+ CORSMiddleware,
+ allow_origins=["http://localhost:8000"],
+ allow_credentials=True,
+ allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+ allow_headers=["Authorization", "Content-Type"],
+ max_age=3600,
+)
 
 @app.get("/pokemon/type/{type_name}")
 def get_pokemon_by_type(type_name: str):

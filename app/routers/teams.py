@@ -7,7 +7,7 @@ from sqlmodel import Session, select, delete
 from typing import Optional, List
 from starlette.responses import StreamingResponse
 from app.database import get_session
-from app.models import Team, TeamCreate, TeamPokemon, PokedexEntry
+from app.models import Team, TeamCreate, TeamPokemon, PokedexEntry, User
 from app.dependencies import get_current_user, get_db
 
 router = APIRouter(prefix="/api/v1/teams", tags=["Teams"])
@@ -89,10 +89,10 @@ def update_team(
         team_id: int,
         team_update: TeamUpdate,
         db: Session = Depends(get_db),
-        current_user_id: int = 1,  # ejemplo de parámetro
+        current_user: User = Depends(get_current_user),
 ):
     team = db.get(Team, team_id)
-    if not team or team.owner_id != current_user_id:
+    if not team or team.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Team not found or not owned by user")
 
     if team_update.name:
@@ -105,7 +105,7 @@ def update_team(
             raise HTTPException(status_code=400, detail="Team cannot have more than 6 Pokémon")
 
         user_pokemon_ids = db.exec(
-            select(PokedexEntry.pokemon_id).where(PokedexEntry.owner_id == current_user_id)
+            select(PokedexEntry.pokemon_id).where(PokedexEntry.owner_id == current_user.id)
         ).all()
 
         for pid in team_update.pokemon_ids:
@@ -124,9 +124,9 @@ def update_team(
 
 
 @router.get("/{team_id}/export")
-def export_team_pdf(team_id: int, db: Session = Depends(get_session)):
+def export_team_pdf(team_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     team = db.get(Team, team_id)
-    if not team:
+    if not team or team.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Team not found")
     team_pokemons = db.exec(
         select(PokedexEntry).where(PokedexEntry.pokemon_id.in_([tp.pokemon_id for tp in team.team_pokemon]))
