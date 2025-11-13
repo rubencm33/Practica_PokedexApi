@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, Request, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from app.database import get_session
@@ -51,8 +50,6 @@ def register_user(
 @router.post("/login")
 def login_user(request: Request, credentials: LoginRequest, session: Session = Depends(get_session)):
     ip = request.client.host
-
-    # Rate limit: 10 intentos/minuto/IP
     if auth.rate_limited(ip, auth.LOGIN_LIMIT, 10, 60):
         raise HTTPException(status_code=429, detail="Demasiados intentos de login. Intenta más tarde.")
 

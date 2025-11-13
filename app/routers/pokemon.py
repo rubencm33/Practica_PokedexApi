@@ -22,7 +22,7 @@ def search_pokemon(
     current_user: User = Depends(get_current_user),
 ):
     ip = current_user.username
-    if rate_limited(ip, SEARCH_LIMIT, 30, 60):
+    if rate_limited(ip, SEARCH_LIMIT, 100, 60):
         raise HTTPException(status_code=429, detail="Demasiadas peticiones, inténtalo más tarde")
 
     try:
@@ -59,7 +59,7 @@ def get_pokemon_details(
     current_user: User = Depends(get_current_user),
 ):
     ip = current_user.username
-    if rate_limited(ip, DETAIL_LIMIT, 30, 60):
+    if rate_limited(ip, DETAIL_LIMIT, 100, 60):
         raise HTTPException(status_code=429, detail="Demasiadas peticiones, inténtalo más tarde")
 
     try:
@@ -82,7 +82,7 @@ def generate_pokemon_card(
         current_user: User = Depends(get_current_user),
 ):
     ip = current_user.username
-    if rate_limited(ip, CARD_LIMIT, 10, 60):
+    if rate_limited(ip, CARD_LIMIT, 100, 60):
         raise HTTPException(status_code=429, detail="Demasiadas peticiones, inténtalo más tarde")
 
     data = pokeapi_service.get_pokemon(id_or_name)
