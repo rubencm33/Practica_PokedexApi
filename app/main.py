@@ -8,6 +8,8 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.routers.auth import router as auth_router
 from app.services.pokeapi_service import PokeAPIService
 from app.routers import pokemon, pokedex, teams
+import logging
+from datetime import datetime
 
 app = FastAPI(title="Pokedex API")
 pokeapi_service = PokeAPIService()
@@ -15,7 +17,6 @@ pokeapi_service = PokeAPIService()
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
 app.add_exception_handler(
     RateLimitExceeded,
     lambda request, exc: JSONResponse(
@@ -24,7 +25,6 @@ app.add_exception_handler(
     ),
 )
 app.add_middleware(SlowAPIMiddleware)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:8000"],
@@ -33,27 +33,55 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
     max_age=3600,
 )
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("pokedex_api.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("pokedex_api")
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = datetime.utcnow()
+    logger.info(f"Request start: {request.method} {request.url.path}")
+    try:
+        response = await call_next(request)
+    except RateLimitExceeded:
+        logger.warning(f"Rate limit exceeded: {request.method} {request.url.path}")
+        raise
+    except Exception as e:
+        logger.exception(f"Unhandled exception on {request.method} {request.url.path}: {str(e)}")
+        raise
+    duration = (datetime.utcnow() - start_time).total_seconds()
+    logger.info(f"Request end: {request.method} {request.url.path} | Status: {response.status_code} | Duration: {duration:.3f}s")
+    return response
+
 @app.get("/pokemon/type/{type_name}")
 @limiter.limit("30/minute")
 def get_pokemon_by_type(request: Request, type_name: str):
+    logger.info(f"PokeAPI call: get_pokemon_by_type {type_name}")
     return pokeapi_service.get_pokemon_by_type(type_name=type_name)
-
 
 @app.get("/pokemon/{id_or_name}")
 @limiter.limit("30/minute")
 def get_pokemon(request: Request, id_or_name: str):
+    logger.info(f"PokeAPI call: get_pokemon {id_or_name}")
     return pokeapi_service.get_pokemon(identifier=id_or_name)
-
 
 @app.get("/pokemon")
 @limiter.limit("30/minute")
 def search_pokemon(request: Request, limit: int = 20, offset: int = 0):
+    logger.info(f"PokeAPI call: search_pokemon limit={limit} offset={offset}")
     return pokeapi_service.search_pokemon(limit=limit, offset=offset)
-
 
 @app.get("/pokemon/species/{id_or_name}")
 @limiter.limit("100/minute")
 def get_pokemon_species(request: Request, id_or_name: str):
+    logger.info(f"PokeAPI call: get_pokemon_species {id_or_name}")
     return pokeapi_service.get_pokemon_species(identifier=id_or_name)
 
 app.include_router(auth_router)
@@ -66,3 +94,4 @@ if __name__ == "__main__":
     from app.database import init_db
     init_db()
     uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
+
