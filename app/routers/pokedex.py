@@ -2,24 +2,32 @@ from collections import Counter
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
-from typing import Optional, List, Counter
+from typing import Optional, List
 from starlette import status
-from app.database import get_session, engine
+from app.database import get_session
 from app.models import PokedexEntry, PokedexEntryCreate, PokedexEntryUpdate
 from app.dependencies import get_db, get_current_user
 from fastapi.responses import StreamingResponse
 import csv
 import io
 from app.services.pokeapi_service import PokeAPIService
+from app.auth import rate_limited
 
 router = APIRouter(prefix="/api/v1/pokedex", tags=["Pokedex"])
 pokeapi_service = PokeAPIService()
+
+POKEDEX_LIMIT = {}
+
 @router.post("/", response_model=PokedexEntryCreate, status_code=status.HTTP_201_CREATED)
 def add_pokemon_to_pokedex(
     entry_data: PokedexEntryCreate,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_session)
 ):
+    ip = current_user.username
+    if rate_limited(ip, POKEDEX_LIMIT, 100, 60):  # 100 requests/min
+        raise HTTPException(status_code=429, detail="Demasiadas peticiones, inténtalo más tarde")
+
     try:
         pokemon_data = pokeapi_service.get_pokemon(entry_data.pokemon_id)
     except HTTPException as e:
@@ -57,6 +65,10 @@ def list_pokedex(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    ip = current_user.username
+    if rate_limited(ip, POKEDEX_LIMIT, 100, 60):
+        raise HTTPException(status_code=429, detail="Demasiadas peticiones, inténtalo más tarde")
+
     query = select(PokedexEntry).where(PokedexEntry.owner_id == current_user.id)
 
     if captured is not None:
@@ -87,6 +99,10 @@ def update_pokedex_entry(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    ip = current_user.username
+    if rate_limited(ip, POKEDEX_LIMIT, 100, 60):
+        raise HTTPException(status_code=429, detail="Demasiadas peticiones, inténtalo más tarde")
+
     entry = db.get(PokedexEntry, entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Entrada no encontrada")
@@ -113,6 +129,10 @@ def delete_pokedex_entry(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    ip = current_user.username
+    if rate_limited(ip, POKEDEX_LIMIT, 100, 60):
+        raise HTTPException(status_code=429, detail="Demasiadas peticiones, inténtalo más tarde")
+
     entry = db.get(PokedexEntry, entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Entrada no encontrada")
@@ -131,8 +151,11 @@ def export_pokedex(
     captured: Optional[bool] = None,
     favorite: Optional[bool] = None
 ):
-    query = select(PokedexEntry).where(PokedexEntry.owner_id == current_user.id)
+    ip = current_user.username
+    if rate_limited(ip, POKEDEX_LIMIT, 100, 60):
+        raise HTTPException(status_code=429, detail="Demasiadas peticiones, inténtalo más tarde")
 
+    query = select(PokedexEntry).where(PokedexEntry.owner_id == current_user.id)
     if captured is not None:
         query = query.where(PokedexEntry.is_captured == captured)
     if favorite is not None:
@@ -160,10 +183,11 @@ def get_pokedex_stats(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    ip = current_user.username
+    if rate_limited(ip, POKEDEX_LIMIT, 100, 60):
+        raise HTTPException(status_code=429, detail="Demasiadas peticiones, inténtalo más tarde")
 
-    entries = db.exec(
-        select(PokedexEntry).where(PokedexEntry.owner_id == current_user.id)
-    ).all()
+    entries = db.exec(select(PokedexEntry).where(PokedexEntry.owner_id == current_user.id)).all()
 
     if not entries:
         return {
@@ -192,9 +216,7 @@ def get_pokedex_stats(
     most_common_type = Counter(types).most_common(1)
     most_common_type = most_common_type[0][0] if most_common_type else None
 
-    captured_dates = sorted(
-        [e.capture_date.date() for e in captured_entries if e.capture_date]
-    )
+    captured_dates = sorted([e.capture_date.date() for e in captured_entries if e.capture_date])
     capture_streak_days = 0
     if captured_dates:
         streak = 1

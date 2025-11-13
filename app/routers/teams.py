@@ -1,6 +1,6 @@
 from io import BytesIO
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import conlist, BaseModel
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from pydantic import BaseModel
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from sqlmodel import Session, select, delete
@@ -9,14 +9,24 @@ from starlette.responses import StreamingResponse
 from app.database import get_session
 from app.models import Team, TeamCreate, TeamPokemon, PokedexEntry, User
 from app.dependencies import get_current_user, get_db
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/v1/teams", tags=["Teams"])
 
+class TeamUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    pokemon_ids: Optional[List[int]] = None
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
+@limiter.limit("100/minute")
 def create_team(
     team_data: TeamCreate,
     db: Session = Depends(get_session),
-    current_user=Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    request: Request = None
 ):
     if len(team_data.pokemon_ids) > 6:
         raise HTTPException(
@@ -27,6 +37,7 @@ def create_team(
         PokedexEntry.owner_id == current_user.id
     )
     user_pokemon_ids = db.exec(pokedex_query).all()
+    user_pokemon_ids = [pid[0] if isinstance(pid, tuple) else pid for pid in user_pokemon_ids]
 
     missing = [pid for pid in team_data.pokemon_ids if pid not in user_pokemon_ids]
     if missing:
@@ -54,19 +65,19 @@ def create_team(
     }
 
 @router.get("/", response_model=list[dict])
+@limiter.limit("100/minute")
 def list_teams(
     db: Session = Depends(get_session),
-    current_user=Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    request: Request = None
 ):
     teams = db.exec(select(Team).where(Team.owner_id == current_user.id)).all()
-    if not teams:
-        return []
-
     result = []
     for team in teams:
         team_pokemons = db.exec(
             select(TeamPokemon.pokemon_id).where(TeamPokemon.team_id == team.id)
         ).all()
+        team_pokemons = [tp[0] if isinstance(tp, tuple) else tp for tp in team_pokemons]
 
         result.append({
             "id": team.id,
@@ -75,21 +86,15 @@ def list_teams(
             "created_at": team.created_at,
             "pokemon_ids": team_pokemons
         })
-
     return result
-
-class TeamUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    pokemon_ids: Optional[List[int]] = None  # Máximo 6 validado en la lógica
-
-
 @router.put("/{team_id}", response_model=TeamUpdate)
+@limiter.limit("100/minute")
 def update_team(
-        team_id: int,
-        team_update: TeamUpdate,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+    team_id: int,
+    team_update: TeamUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    request: Request = None
 ):
     team = db.get(Team, team_id)
     if not team or team.owner_id != current_user.id:
@@ -107,6 +112,7 @@ def update_team(
         user_pokemon_ids = db.exec(
             select(PokedexEntry.pokemon_id).where(PokedexEntry.owner_id == current_user.id)
         ).all()
+        user_pokemon_ids = [pid[0] if isinstance(pid, tuple) else pid for pid in user_pokemon_ids]
 
         for pid in team_update.pokemon_ids:
             if pid not in user_pokemon_ids:
@@ -122,15 +128,21 @@ def update_team(
     db.refresh(team)
     return team
 
-
 @router.get("/{team_id}/export")
-def export_team_pdf(team_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@limiter.limit("100/minute")
+def export_team_pdf(
+    team_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    request: Request = None
+):
     team = db.get(Team, team_id)
     if not team or team.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Team not found")
     team_pokemons = db.exec(
         select(PokedexEntry).where(PokedexEntry.pokemon_id.in_([tp.pokemon_id for tp in team.team_pokemon]))
     ).all()
+
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
