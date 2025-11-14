@@ -17,6 +17,7 @@ CARD_LIMIT = {}
 
 @router.get("/search")
 def search_pokemon(
+    name: str | None = None,
     limit: int = 20,
     offset: int = 0,
     current_user: User = Depends(get_current_user),
@@ -28,7 +29,7 @@ def search_pokemon(
     try:
         data = pokeapi_service.search_pokemon(limit=limit, offset=offset)
 
-        results = data.get("results", data)  # fallback por si devuelve lista
+        results = data.get("results", data)
 
         simplified = []
         for entry in results:
@@ -52,6 +53,7 @@ def search_pokemon(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener Pokémon: {str(e)}")
+
 
 @router.get("/{id_or_name}")
 def get_pokemon_details(
