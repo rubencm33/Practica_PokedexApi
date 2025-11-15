@@ -1,3 +1,4 @@
+from urllib import request
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from app.services.pokeapi_service import PokeAPIService
@@ -78,10 +79,11 @@ def get_pokemon_details(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener detalles: {str(e)}")
 
+
 @router.get("/{id_or_name}/card")
 def generate_pokemon_card(
     id_or_name: str,
-        current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     ip = current_user.username
     if rate_limited(ip, CARD_LIMIT, 100, 60):
@@ -94,32 +96,55 @@ def generate_pokemon_card(
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, f"{data['name']}_card.pdf")
 
+    image_url = data["sprites"]["other"]["official-artwork"]["front_default"]
+    img_path = os.path.join(export_dir, f"{data['name']}.png")
+    request.urlretrieve(image_url, img_path)
+
+    types = [t["type"]["name"] for t in data["types"]]
+    stats = {s["stat"]["name"]: s["base_stat"] for s in data["stats"]}
+    description = next(
+        (e["flavor_text"] for e in species["flavor_text_entries"] if e["language"]["name"] == "es"),
+        "Descripción no disponible."
+    ).replace("\n", " ")
+
     c = canvas.Canvas(file_path, pagesize=letter)
-    c.setFont("Helvetica-Bold", 18)
-    c.drawString(200, 750, f"Pokémon Card: {data['name'].capitalize()}")
+
+    c.setFillColor("#ECECEC")
+    c.rect(0, 0, 612, 792, fill=1)
+
+    c.setFillColor("white")
+    c.roundRect(40, 40, 532, 712, 20, fill=1)
+
+    c.setFillColor("black")
+    c.setFont("Helvetica-Bold", 28)
+    c.drawString(60, 730, data["name"].capitalize())
+
+    c.setFont("Helvetica", 14)
+    c.drawString(60, 705, f"ID: {data['id']}")
+    c.drawString(60, 685, f"Tipos: {', '.join(types)}")
+
+    if os.path.exists(img_path):
+        c.drawImage(img_path, 330, 500, width=230, height=230, preserveAspectRatio=True)
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(60, 640, "Estadísticas:")
 
     c.setFont("Helvetica", 12)
-    c.drawString(100, 720, f"ID: {data['id']}")
-    c.drawString(100, 700, f"Tipos: {', '.join([t['type']['name'] for t in data['types']])}")
-    c.drawString(100, 680, f"Habilidades: {', '.join([a['ability']['name'] for a in data['abilities']])}")
+    y = 620
+    for key in ["hp", "attack", "defense", "special-attack", "special-defense", "speed"]:
+        c.drawString(60, y, f"{key.upper()}: {stats.get(key, 0)}")
+        y -= 18
 
-    stats = {s["stat"]["name"]: s["base_stat"] for s in data["stats"]}
-    c.drawString(100, 660, f"HP: {stats.get('hp', 0)}")
-    c.drawString(100, 640, f"Ataque: {stats.get('attack', 0)}")
-    c.drawString(100, 620, f"Defensa: {stats.get('defense', 0)}")
-    c.drawString(100, 600, f"Velocidad: {stats.get('speed', 0)}")
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(60, 470, "Descripción:")
 
-    description = next(
-        (entry["flavor_text"] for entry in species["flavor_text_entries"] if entry["language"]["name"] == "es"),
-        "Descripción no disponible."
-    )
-    c.setFont("Helvetica-Oblique", 10)
-    c.drawString(100, 560, f"Descripción: {description.replace(chr(10), ' ')}")
+    text = c.beginText(60, 450)
+    text.setFont("Helvetica", 12)
+    for line in description.split(". "):
+        text.textLine(line)
+    c.drawText(text)
 
-    c.showPage()
     c.save()
 
     return FileResponse(file_path, filename=f"{data['name']}_card.pdf", media_type="application/pdf")
-
-
 

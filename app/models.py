@@ -1,3 +1,4 @@
+from pydantic import ConfigDict
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List
 from datetime import datetime, UTC
@@ -17,7 +18,7 @@ class User(UserBase, table=True):
 
 
 class UserCreate(UserBase):
-    password: str = Field(min_length=8)
+    password: str
 
 
 class UserRead(UserBase):
@@ -63,8 +64,7 @@ class PokedexEntryRead(PokedexEntryBase):
     nickname: Optional[str] = None
     is_captured: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TeamBase(SQLModel):
     name: str = Field(index=True, min_length=3, max_length=50)
