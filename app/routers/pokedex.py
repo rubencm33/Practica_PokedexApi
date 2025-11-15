@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 from typing import Optional, List
 from starlette import status
 from app.database import get_session
-from app.models import PokedexEntry, PokedexEntryCreate, PokedexEntryUpdate
+from app.models import PokedexEntry, PokedexEntryCreate, PokedexEntryUpdate, PokedexEntryRead
 from app.dependencies import get_db, get_current_user
 from fastapi.responses import StreamingResponse
 import csv
@@ -18,7 +18,7 @@ pokeapi_service = PokeAPIService()
 
 POKEDEX_LIMIT = {}
 
-@router.post("/", response_model=PokedexEntryCreate, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=PokedexEntryRead, status_code=status.HTTP_201_CREATED)
 def add_pokemon_to_pokedex(
     entry_data: PokedexEntryCreate,
     current_user = Depends(get_current_user),
@@ -48,11 +48,7 @@ def add_pokemon_to_pokedex(
     db.add(entry)
     db.commit()
     db.refresh(entry)
-    return {
-        "pokemon_id": entry.pokemon_id,
-        "nickname": entry.nickname,
-        "is_captured": entry.is_captured
-    }
+    return entry
 
 @router.get("/", response_model=List[dict])
 def list_pokedex(
@@ -109,7 +105,7 @@ def update_pokedex_entry(
     if entry.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="No puedes modificar esta entrada")
 
-    for key, value in update_data.dict(exclude_unset=True).items():
+    for key, value in update_data.model_dump(exclude_unset=True).items():
         setattr(entry, key, value)
 
     db.add(entry)
@@ -147,7 +143,6 @@ def delete_pokedex_entry(
 def export_pokedex(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    format: str = Query("csv", enum=["csv", "pdf"]),
     captured: Optional[bool] = None,
     favorite: Optional[bool] = None
 ):
@@ -163,20 +158,21 @@ def export_pokedex(
 
     entries = db.exec(query).all()
 
-    if format == "csv":
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["pokemon_id", "pokemon_name", "nickname", "is_captured", "favorite"])
-        for e in entries:
-            writer.writerow([e.pokemon_id, e.pokemon_name, e.nickname, e.is_captured, e.favorite])
-        output.seek(0)
-        return StreamingResponse(
-            output,
-            media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=pokedex.csv"}
-        )
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["pokemon_id", "pokemon_name", "nickname", "is_captured", "favorite"])
 
-    raise HTTPException(status_code=501, detail="Formato PDF no implementado")
+    for e in entries:
+        writer.writerow([e.pokemon_id, e.pokemon_name, e.nickname, e.is_captured, e.favorite])
+
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=pokedex.csv"}
+    )
+
 
 @router.get("/stats")
 def get_pokedex_stats(
